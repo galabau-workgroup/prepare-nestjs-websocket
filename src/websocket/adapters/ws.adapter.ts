@@ -4,11 +4,12 @@ import { Observable, fromEvent, EMPTY } from 'rxjs';
 import { mergeMap, filter } from 'rxjs/operators';
 import * as WebSocket from 'ws';
 import { Server } from 'ws';
-import { IncomingMessage } from 'http';
 import { AuthService } from '../../auth/auth.service';
+import { IncomingMessage } from 'http';
 
 export class CustomWebSocketAdapter implements WebSocketAdapter {
   private readonly logger = new Logger('CustomWebSocketAdapter');
+  private wsServer: Server;
 
   constructor(
     private readonly app: INestApplication,
@@ -16,12 +17,26 @@ export class CustomWebSocketAdapter implements WebSocketAdapter {
   ) {}
 
   create(port: number, options: any = {}): Server {
-    this.logger.log(`Creating WebSocket server on port ${port}`);
-    return new Server({ port, ...options });
+    if (!this.wsServer) {
+      const httpServer = this.app.getHttpServer();
+
+      // Attach the WebSocket server to the existing HTTP server
+      this.wsServer = new Server({ server: httpServer, ...options });
+
+      // Log the actual port dynamically after the server is bound
+      httpServer.on('listening', () => {
+        const address = httpServer.address();
+        const actualPort =
+          typeof address === 'string' ? address : address?.port;
+        this.logger.log(
+          `WebSocket server attached to HTTP server on port ${actualPort}`,
+        );
+      });
+    }
+    return this.wsServer;
   }
 
   bindClientConnect(server: Server, callback: (client: WebSocket) => void) {
-    console.log('Binding client connect');
     server.on('connection', (ws: WebSocket, request: IncomingMessage) => {
       const authorization = request.headers['authorization'];
       if (!authorization || !authorization.startsWith('Bearer ')) {
@@ -30,12 +45,12 @@ export class CustomWebSocketAdapter implements WebSocketAdapter {
       }
       const token = authorization.split(' ')[1];
 
-      console.log(`New client connected, used token: ${token}`);
+      this.logger.log(`New client connected with token: ${token}`);
       callback(ws);
     });
 
     server.on('error', (err) => {
-      console.error('WebSocket Server Error:', err);
+      this.logger.error('WebSocket Server Error:', err);
     });
   }
 
@@ -44,7 +59,6 @@ export class CustomWebSocketAdapter implements WebSocketAdapter {
     handlers: MessageMappingProperties[],
     process: (data: any) => Observable<any>,
   ): void {
-    console.log('Binding message handlers');
     fromEvent(client, 'message')
       .pipe(
         mergeMap((message) => this.handleMessage(message, handlers, process)),
@@ -86,8 +100,10 @@ export class CustomWebSocketAdapter implements WebSocketAdapter {
     return process(handler.callback(parsedMessage));
   }
 
-  close(server: Server): void {
-    this.logger.log('Closing WebSocket Server');
-    server.close();
+  close(): void {
+    if (this.wsServer) {
+      this.logger.log('Closing WebSocket Server');
+      this.wsServer.close();
+    }
   }
 }
