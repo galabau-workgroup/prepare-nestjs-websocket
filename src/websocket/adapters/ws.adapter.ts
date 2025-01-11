@@ -64,14 +64,14 @@ export class CustomWebSocketAdapter implements WebSocketAdapter {
         mergeMap((message) => this.handleMessage(message, handlers, process)),
         filter((result) => !!result),
       )
-      .subscribe(
-        (response) => {
+      .subscribe({
+        next: (response) => {
           client.send(JSON.stringify(response));
         },
-        (error) => {
+        error: (error) => {
           this.logger.error(`Error handling message: ${error.message}`);
         },
-      );
+      });
   }
 
   private handleMessage(
