@@ -4,29 +4,36 @@ import {
   OnGatewayInit,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  WebSocketServer,
 } from '@nestjs/websockets';
 import { ChatService } from '../services/chat.service';
 import { WS_EVENTS } from '../../shared/constants/ws-events.constant';
 import { MessageResponseDto } from '../dto/message-response.dto';
 import { WSClient } from '../interfaces/client.interface';
 import { v4 as uuidv4 } from 'uuid';
-import { Logger, Injectable } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { SendMessageDto } from '../dto/send-message.dto';
+import { Server } from 'ws';
 
 @WebSocketGateway({
   path: '/chat',
-  port: 3001,
 })
-@Injectable()
 export class ChatGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
+  @WebSocketServer()
+  server: Server;
+
   private logger: Logger = new Logger('ChatGateway');
 
   constructor(private chatService: ChatService) {}
 
   afterInit() {
     this.logger.log('ChatGateway initialized');
+
+    this.server.on('connection', () => {
+      this.logger.log('New client connected to ChatGateway');
+    });
   }
 
   handleConnection(client: WSClient) {

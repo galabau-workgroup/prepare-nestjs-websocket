@@ -102,8 +102,8 @@ export class CustomWebSocketAdapter implements WebSocketAdapter {
 
   close(): void {
     if (this.wsServer) {
-      this.logger.log('Closing WebSocket Server');
       this.wsServer.close();
+      this.logger.log('Closing WebSocket Server');
     }
   }
 }

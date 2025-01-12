@@ -6,8 +6,10 @@ import {
   MessageBody,
   SubscribeMessage,
   ConnectedSocket,
+  OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, WebSocket } from 'ws';
+import { Logger } from '@nestjs/common';
 // import { AuthGuard } from '../auth/auth.guard';
 // import { UseGuards } from '@nestjs/common';
 
@@ -15,35 +17,42 @@ import { Server, WebSocket } from 'ws';
 @WebSocketGateway({
   transports: ['websocket'],
   path: '/secure-chat',
-  port: 3002,
 })
 export class SecureChatGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer()
   server: Server;
 
+  private logger: Logger = new Logger('Secure Chat Gateway');
+
+  afterInit() {
+    this.logger.log('Secure Chat Gateway initialized');
+
+    this.server.on('connection', () => {
+      this.logger.log('New client connected to Secure Chat Gateway');
+    });
+  }
+
   async handleConnection(client: WebSocket, request: Request): Promise<void> {
-    const token = this.getTokenFromHeader(request);
-
-    if (!token) {
-      await this.rejectConnection(client, 4401, 'Missing Authorization header');
-      return;
-    }
-
-    if (!(await this.verifyToken(token))) {
-      await this.rejectConnection(client, 4403, 'Invalid token provided');
-      return;
-    }
+    // const token = this.getTokenFromHeader(request);
+    //
+    // if (!token) {
+    //   await this.rejectConnection(client, 4401, 'Missing Authorization header');
+    //   return;
+    // }
+    //
+    // if (!(await this.verifyToken(token))) {
+    //   await this.rejectConnection(client, 4403, 'Invalid token provided');
+    //   return;
+    // }
 
     client.send('Connection established');
-
-    console.log('Connection established');
 
     if (client.readyState === WebSocket.OPEN) {
       client.send(
         JSON.stringify({
-          event: 'welcome',
+          type: 'welcome',
           data: 'Welcome to the WebSocket server!',
         }),
       );
@@ -68,18 +77,18 @@ export class SecureChatGateway
     client.close(code, reason);
   }
 
-  private getTokenFromHeader(request: Request): string | null {
-    const authHeader = request.headers['authorization'];
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return null;
-    }
-    return authHeader.split(' ')[1];
-  }
+  // private getTokenFromHeader(request: Request): string | null {
+  //   const authHeader = request.headers['authorization'];
+  //   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  //     return null;
+  //   }
+  //   return authHeader.split(' ')[1];
+  // }
 
-  private async verifyToken(token: string) {
-    // Replace this with your actual token verification logic
-    return token === 'VALID_TOKEN';
-  }
+  // private async verifyToken(token: string) {
+  //   // Replace this with your actual token verification logic
+  //   return token === 'VALID_TOKEN';
+  // }
 
   // public async verifyToken(token: string): Promise<string> {
   //   const apiUrl = 'https://api.software.net/me';
@@ -109,10 +118,10 @@ export class SecureChatGateway
   //   }
   // }
 
-  @SubscribeMessage('message')
+  @SubscribeMessage('secureMessage')
   handleMessage(
     @ConnectedSocket() client: WebSocket,
-    @MessageBody() message: { user: string; text: string },
+    @MessageBody() message: { data: { user: string; text: string } },
   ): void {
     console.log('Message received:', message);
 
@@ -120,8 +129,8 @@ export class SecureChatGateway
     if (client.readyState === WebSocket.OPEN) {
       client.send(
         JSON.stringify({
-          event: 'reply',
-          data: `Hello ${message.user}, you said: '${message.text}'`,
+          type: 'reply',
+          data: `Hello ${message.data.user}, you said: '${message.data.text}'`,
         }),
       );
     }
@@ -134,8 +143,8 @@ export class SecureChatGateway
       ) {
         connectedClient.send(
           JSON.stringify({
-            event: 'broadcast',
-            data: `${message.user} says: "${message.text}"`,
+            type: 'broadcast',
+            data: `${message.data.user} says: "${message.data.text}"`,
           }),
         );
       }
@@ -155,8 +164,8 @@ export class SecureChatGateway
     if (client.readyState === WebSocket.OPEN) {
       client.send(
         JSON.stringify({
-          event: 'reply',
-          data: `We are replying to yur hello event!!`,
+          type: 'reply',
+          data: 'We say hello too!!',
         }),
       );
     }
