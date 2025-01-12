@@ -24,7 +24,7 @@ export class ChatGateway
   @WebSocketServer()
   server: Server;
 
-  private logger: Logger = new Logger('ChatGateway');
+  private logger: Logger = new Logger('Chat Gateway');
 
   constructor(private chatService: ChatService) {}
 
@@ -32,7 +32,7 @@ export class ChatGateway
     this.logger.log('ChatGateway initialized');
 
     this.server.on('connection', () => {
-      this.logger.log('New client connected to ChatGateway');
+      this.logger.log('New client connected to Chat Gateway');
     });
   }
 

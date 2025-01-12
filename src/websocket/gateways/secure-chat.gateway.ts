@@ -10,6 +10,9 @@ import {
 } from '@nestjs/websockets';
 import { Server, WebSocket } from 'ws';
 import { Logger } from '@nestjs/common';
+import { MessageResponseDto } from '../dto/message-response.dto';
+import { MessageHandlers } from '../../handlers';
+import { SendMessageDto } from '../dto/send-message.dto';
 // import { AuthGuard } from '../auth/auth.guard';
 // import { UseGuards } from '@nestjs/common';
 
@@ -49,6 +52,10 @@ export class SecureChatGateway
 
     client.send('Connection established');
 
+    client.on('message', (message: string) => {
+      this.routeMessage(client, message);
+    });
+
     if (client.readyState === WebSocket.OPEN) {
       client.send(
         JSON.stringify({
@@ -64,18 +71,45 @@ export class SecureChatGateway
     client.close();
   }
 
-  private async rejectConnection(
-    client: WebSocket,
-    code: number,
-    reason: string,
-  ) {
-    console.error(`Connection rejected: ${reason}`);
-    // Send rejection message to client
-    client.send(JSON.stringify({ error: reason, code }));
+  private routeMessage(client: WebSocket, rawMessage: string) {
+    try {
+      const { type, data } = JSON.parse(rawMessage) as SendMessageDto;
 
-    // Close the connection immediately to prevent reconnection
-    client.close(code, reason);
+      const handler = MessageHandlers[type];
+      if (handler) {
+        handler(client, data);
+      } else {
+        console.error(`No handler found for message type: ${type}`);
+        client.send(
+          JSON.stringify({
+            type: 'error',
+            data: `Unknown message type: ${type}`,
+          }),
+        );
+      }
+    } catch (error) {
+      console.error('Invalid message format:', error.message);
+      client.send(
+        JSON.stringify({
+          type: 'error',
+          data: 'Invalid message format',
+        }),
+      );
+    }
   }
+
+  // private async rejectConnection(
+  //   client: WebSocket,
+  //   code: number,
+  //   reason: string,
+  // ) {
+  //   console.error(`Connection rejected: ${reason}`);
+  //   // Send rejection message to client
+  //   client.send(JSON.stringify({ error: reason, code }));
+  //
+  //   // Close the connection immediately to prevent reconnection
+  //   client.close(code, reason);
+  // }
 
   // private getTokenFromHeader(request: Request): string | null {
   //   const authHeader = request.headers['authorization'];
@@ -118,56 +152,56 @@ export class SecureChatGateway
   //   }
   // }
 
-  @SubscribeMessage('secureMessage')
-  handleMessage(
-    @ConnectedSocket() client: WebSocket,
-    @MessageBody() message: { data: { user: string; text: string } },
-  ): void {
-    console.log('Message received:', message);
+  // @SubscribeMessage('secureMessage')
+  // handleMessage(
+  //   @ConnectedSocket() client: WebSocket,
+  //   @MessageBody() message: { data: { user: string; text: string } },
+  // ): void {
+  //   console.log('Message received:', message);
+  //
+  //   // Send a reply to the sender
+  //   if (client.readyState === WebSocket.OPEN) {
+  //     client.send(
+  //       JSON.stringify({
+  //         type: 'reply',
+  //         data: `Hello ${message.data.user}, you said: '${message.data.text}'`,
+  //       }),
+  //     );
+  //   }
+  //
+  //   // Broadcast the message to all other clients
+  //   this.server.clients.forEach((connectedClient) => {
+  //     if (
+  //       connectedClient !== client &&
+  //       connectedClient.readyState === WebSocket.OPEN
+  //     ) {
+  //       connectedClient.send(
+  //         JSON.stringify({
+  //           type: 'broadcast',
+  //           data: `${message.data.user} says: "${message.data.text}"`,
+  //         }),
+  //       );
+  //     }
+  //   });
+  // }
 
-    // Send a reply to the sender
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(
-        JSON.stringify({
-          type: 'reply',
-          data: `Hello ${message.data.user}, you said: '${message.data.text}'`,
-        }),
-      );
-    }
-
-    // Broadcast the message to all other clients
-    this.server.clients.forEach((connectedClient) => {
-      if (
-        connectedClient !== client &&
-        connectedClient.readyState === WebSocket.OPEN
-      ) {
-        connectedClient.send(
-          JSON.stringify({
-            type: 'broadcast',
-            data: `${message.data.user} says: "${message.data.text}"`,
-          }),
-        );
-      }
-    });
-  }
-
-  @SubscribeMessage('hello')
-  handleHello(
-    @ConnectedSocket() client: WebSocket,
-    @MessageBody() message: any,
-  ): void {
-    console.log('Message received:', message);
-
-    console.log('client', client);
-
-    // Send a reply to the sender
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(
-        JSON.stringify({
-          type: 'reply',
-          data: 'We say hello too!!',
-        }),
-      );
-    }
-  }
+  // @SubscribeMessage('hello')
+  // handleHello(
+  //   @ConnectedSocket() client: WebSocket,
+  //   @MessageBody() message: any,
+  // ): void {
+  //   console.log('Message received:', message);
+  //
+  //   console.log('client', client);
+  //
+  //   // Send a reply to the sender
+  //   if (client.readyState === WebSocket.OPEN) {
+  //     client.send(
+  //       JSON.stringify({
+  //         type: 'reply',
+  //         data: 'We say hello too!!',
+  //       }),
+  //     );
+  //   }
+  // }
 }
